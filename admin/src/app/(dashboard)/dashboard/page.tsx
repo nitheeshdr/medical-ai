@@ -41,19 +41,44 @@ function StatCard({
   )
 }
 
+// ── types ──────────────────────────────────────────────────────────────────
+interface DailyUserPoint { _id: string; count: number }
+interface DailyAIPoint { _id: string; requests: number; tokens: number; cost: number }
+interface DailyApptPoint { _id: string; count: number }
+interface ActivityItem { user: string; action: string; time: string; type: string }
+interface StatsData {
+  stats: {
+    users: { total: number; new: number }
+    doctors: { total: number }
+    subscriptions: { active: number }
+    ai: { requests: number; cost: number; tokensUsed: number }
+    appointments: { total: number }
+    prescriptions: { total: number }
+    estimatedRevenue: number
+  }
+  charts: {
+    dailyUsers: DailyUserPoint[]
+    dailyAI: DailyAIPoint[]
+    dailyAppointments: DailyApptPoint[]
+  }
+  recentActivity: ActivityItem[]
+  estimatedRevenue: number
+}
+
 export default async function DashboardPage() {
-  const data = await fetchStats(30)
+  const raw = await fetchStats(30)
+  const data = raw as StatsData | null
 
   const stats = data?.stats
   const charts = data?.charts
-  const activity: { user: string; action: string; time: string; type: string }[] = data?.recentActivity ?? []
+  const activity: ActivityItem[] = data?.recentActivity ?? []
 
-  const dailyUsersData = (charts?.dailyUsers ?? []).map((d: { _id: string; count: number }) => ({
+  const dailyUsersData = (charts?.dailyUsers ?? []).map((d: DailyUserPoint) => ({
     label: d._id.slice(5),
     count: d.count,
   }))
 
-  const dailyAIData = (charts?.dailyAI ?? []).map((d: { _id: string; requests: number; tokens: number; cost: number }) => ({
+  const dailyAIData = (charts?.dailyAI ?? []).map((d: DailyAIPoint) => ({
     label: d._id.slice(5),
     requests: d.requests,
     tokens: Math.round(d.tokens / 100),

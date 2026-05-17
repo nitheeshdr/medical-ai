@@ -2,6 +2,20 @@ import { Brain, DollarSign, Zap, TrendingUp } from 'lucide-react'
 import { fetchAiUsage } from '@/lib/api'
 import { AiUsageCharts } from '@/components/dashboard/ai-usage-charts'
 
+// ── types ──────────────────────────────────────────────────────────────────
+interface AiKpis {
+  tokensToday: number; costToday: number; callsToday: number
+  tokensPeriod: number; costPeriod: number; callsPeriod: number; projectedMonthlyCost: number
+}
+interface DailyPoint { day: string; chat: number; scan: number; reports: number; wellness: number; cost: number }
+interface ModelRow { model: string; tokens: number; cost: number; calls: number; pct: number }
+interface FeatureRow { feature: string; daily: string; monthly: string; pct: number }
+interface ConsumerRow { name: string; plan: string; calls: number; tokens: number; cost: string }
+interface AiUsageData {
+  kpis: AiKpis; dailyData: DailyPoint[]; modelUsage: ModelRow[]
+  featureCosts: FeatureRow[]; topConsumers: ConsumerRow[]
+}
+
 function fmt(n: number, k = false) {
   if (k && n >= 1000) return `${(n / 1000).toFixed(1)}K`
   if (k && n >= 1000000) return `${(n / 1000000).toFixed(2)}M`
@@ -9,13 +23,14 @@ function fmt(n: number, k = false) {
 }
 
 export default async function AiUsagePage() {
-  const data = await fetchAiUsage(14)
+  const raw = await fetchAiUsage(14)
+  const data = raw as AiUsageData | null
 
-  const kpis = data?.kpis ?? { tokensToday: 0, costToday: 0, callsToday: 0, tokensPeriod: 0, costPeriod: 0, callsPeriod: 0, projectedMonthlyCost: 0 }
-  const dailyData = data?.dailyData ?? []
-  const modelUsage = data?.modelUsage ?? []
-  const featureCosts = data?.featureCosts ?? []
-  const topConsumers = data?.topConsumers ?? []
+  const kpis: AiKpis = data?.kpis ?? { tokensToday: 0, costToday: 0, callsToday: 0, tokensPeriod: 0, costPeriod: 0, callsPeriod: 0, projectedMonthlyCost: 0 }
+  const dailyData: DailyPoint[] = data?.dailyData ?? []
+  const modelUsage: ModelRow[] = data?.modelUsage ?? []
+  const featureCosts: FeatureRow[] = data?.featureCosts ?? []
+  const topConsumers: ConsumerRow[] = data?.topConsumers ?? []
 
   const FEATURE_LABEL: Record<string, string> = {
     chat: 'AI Chat',

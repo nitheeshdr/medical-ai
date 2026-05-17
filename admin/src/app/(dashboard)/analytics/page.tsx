@@ -1,24 +1,39 @@
 import { fetchStats } from '@/lib/api'
 import { AnalyticsCharts } from '@/components/dashboard/analytics-charts'
 
+interface DailyPoint { _id: string; count: number }
+interface DailyAIPoint { _id: string; requests: number; tokens: number; cost: number }
+interface AnalyticsData {
+  stats: {
+    users: { total: number; new: number }
+    ai: { requests: number; cost: number; tokensUsed: number }
+  }
+  charts: {
+    dailyUsers: DailyPoint[]
+    dailyAI: DailyAIPoint[]
+    dailyAppointments: DailyPoint[]
+  }
+}
+
 export default async function AnalyticsPage() {
-  const data = await fetchStats(30)
+  const raw = await fetchStats(30)
+  const data = raw as AnalyticsData | null
   const charts = data?.charts
   const stats = data?.stats
 
-  const dailyUsers = (charts?.dailyUsers ?? []).map((d: { _id: string; count: number }) => ({
+  const dailyUsers = (charts?.dailyUsers ?? []).map((d: DailyPoint) => ({
     date: d._id.slice(5),
     users: d.count,
   }))
 
-  const dailyAI = (charts?.dailyAI ?? []).map((d: { _id: string; requests: number; tokens: number; cost: number }) => ({
+  const dailyAI = (charts?.dailyAI ?? []).map((d: DailyAIPoint) => ({
     date: d._id.slice(5),
     requests: d.requests,
     tokens: Math.round(d.tokens / 100),
     cost: Number(d.cost.toFixed(3)),
   }))
 
-  const dailyAppts = (charts?.dailyAppointments ?? []).map((d: { _id: string; count: number }) => ({
+  const dailyAppts = (charts?.dailyAppointments ?? []).map((d: DailyPoint) => ({
     date: d._id.slice(5),
     appointments: d.count,
   }))
