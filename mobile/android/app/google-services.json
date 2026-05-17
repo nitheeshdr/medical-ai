@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "998139226130",
+    "project_id": "medical-bf74c",
+    "storage_bucket": "medical-bf74c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:998139226130:android:3e7dee1490ef44e1d090cb",
+        "android_client_info": {
+          "package_name": "com.medinova.medinovaAi"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "998139226130-2951c9vihj4vvl9k2asltj636vdkrp9v.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.medinova.medinovaAi",
+            "certificate_hash": "98b4c5d3b5fcf026563527fcb23fcf47070419db"
+          }
+        },
+        {
+          "client_id": "998139226130-rgummngek3j393fom45ilifdfvhhhm3g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPp5pepXq2gli4gC7dQ2QK_MRnopc89aw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "998139226130-rgummngek3j393fom45ilifdfvhhhm3g.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "998139226130-jou64kitl2eu5aqrv6nmsuietpa8hm8a.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.medinova.medinovaAi"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

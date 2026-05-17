@@ -1,0 +1,10 @@
+.env
+.env.local
+.env.*.local
+.env.production.local
+.next/
+node_modules/
+*.log
+.DS_Store
+.vercel
+uploads/
