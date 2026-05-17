@@ -29,7 +29,8 @@ export default function LoginPage() {
         setError('Access denied — admin accounts only')
         return
       }
-      document.cookie = `admin_token=${json.token}; path=/; max-age=604800; SameSite=Lax`
+      const isSecure = location.protocol === 'https:'
+      document.cookie = `admin_token=${json.token}; path=/; max-age=604800; SameSite=Strict${isSecure ? '; Secure' : ''}`
       router.replace('/dashboard')
     } catch {
       setError('Connection failed — check your network')
