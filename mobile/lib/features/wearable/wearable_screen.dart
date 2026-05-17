@@ -1,23 +1,19 @@
 import '../../shared/widgets/wise/wise_card.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_colors.dart';
+import '../../providers/health_data_provider.dart';
 
-
-class WearableScreen extends StatefulWidget {
+class WearableScreen extends ConsumerStatefulWidget {
   const WearableScreen({super.key});
 
   @override
-  State<WearableScreen> createState() => _WearableScreenState();
+  ConsumerState<WearableScreen> createState() => _WearableScreenState();
 }
 
-class _WearableScreenState extends State<WearableScreen> with SingleTickerProviderStateMixin {
+class _WearableScreenState extends ConsumerState<WearableScreen> with SingleTickerProviderStateMixin {
   bool _scanning = false;
   late AnimationController _scanCtrl;
-
-  final _paired = [
-    _Wearable('Apple Watch Ultra 2', 'watchOS 11.0', Icons.watch_rounded, true, '98%'),
-    _Wearable('Fitbit Charge 6', 'Firmware 1.182', Icons.fitness_center_rounded, false, '62%'),
-  ];
 
   @override
   void initState() {
@@ -30,80 +26,70 @@ class _WearableScreenState extends State<WearableScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
+    final healthDataAsync = ref.watch(healthDataProvider);
+
     return Scaffold(
       backgroundColor: kBackground,
-      appBar: AppBar(title: const Text('Wearable Devices'), backgroundColor: kBackground, foregroundColor: kPrimaryText),
+      appBar: AppBar(
+        title: const Text('Wearable & Health Data'),
+        backgroundColor: kBackground,
+        foregroundColor: kPrimaryText,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => ref.invalidate(healthDataProvider),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (_paired.isNotEmpty) ...[
-            const Text('PAIRED DEVICES', style: TextStyle(color: kTertiaryText, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
-            const SizedBox(height: 8),
-            ..._paired.map((w) => WiseCard(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(16),
-              child: Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: w.connected ? kPrimaryText.withValues(alpha: 0.1) : kElevated,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(w.icon, color: w.connected ? kPrimaryText : kSecondaryText, size: 28),
-                ),
-                const SizedBox(width: 14),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(w.name, style: const TextStyle(color: kPrimaryText, fontSize: 14, fontWeight: FontWeight.w600)),
-                  Text(w.version, style: const TextStyle(color: kSecondaryText, fontSize: 12)),
-                  const SizedBox(height: 4),
-                  Row(children: [
-                    Container(width: 6, height: 6,
-                        decoration: BoxDecoration(
-                            color: w.connected ? kSuccessGreen : kTertiaryText,
-                            shape: BoxShape.circle)),
-                    const SizedBox(width: 6),
-                    Text(w.connected ? 'Connected' : 'Disconnected',
-                        style: TextStyle(color: w.connected ? kSuccessGreen : kTertiaryText, fontSize: 11)),
-                    const Spacer(),
-                    const Icon(Icons.battery_full_rounded, color: kSecondaryText, size: 14),
-                    const SizedBox(width: 2),
-                    Text(w.battery, style: const TextStyle(color: kSecondaryText, fontSize: 11)),
-                  ]),
-                ])),
-                PopupMenuButton<String>(
-                  color: kElevated,
-                  icon: const Icon(Icons.more_vert_rounded, color: kSecondaryText),
-                  onSelected: (v) {},
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'sync', child: Text('Sync Now', style: TextStyle(color: kPrimaryText))),
-                    const PopupMenuItem(value: 'forget', child: Text('Forget Device', style: TextStyle(color: kErrorRed))),
-                  ],
-                ),
-              ]),
-            )),
-            const SizedBox(height: 20),
-          ],
-          // Live metrics from wearable
-          const Text('LIVE METRICS', style: TextStyle(color: kTertiaryText, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+          const Text('SYSTEM HEALTH METRICS', style: TextStyle(color: kTertiaryText, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
           const SizedBox(height: 8),
-          GridView.count(
-            crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.4,
-            children: [
-              _MetricCard(Icons.favorite_rounded, 'Heart Rate', '72 bpm', kSuccessGreen),
-              _MetricCard(Icons.directions_walk_rounded, 'Steps', '6,240', kPrimaryText),
-              _MetricCard(Icons.local_fire_department_rounded, 'Calories', '342 kcal', kWarningOrange),
-              _MetricCard(Icons.bloodtype_rounded, 'SpO2', '98%', kPrimaryText),
-            ],
+          healthDataAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, st) => Center(child: Text('Error loading health data: $e')),
+            data: (data) {
+              if (data.containsKey('error')) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.error_outline, color: kErrorRed, size: 40),
+                        const SizedBox(height: 10),
+                        Text(data['error']!, style: const TextStyle(color: kErrorRed)),
+                        const SizedBox(height: 10),
+                        OutlinedButton(
+                          onPressed: () => ref.invalidate(healthDataProvider),
+                          child: const Text('Grant Permissions & Retry'),
+                        )
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return GridView.count(
+                crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.4,
+                children: [
+                  _MetricCard(Icons.favorite_rounded, 'Heart Rate', '${data['heartRate']} bpm', kErrorRed),
+                  _MetricCard(Icons.directions_walk_rounded, 'Steps', data['steps'] ?? '0', kPrimaryText),
+                  _MetricCard(Icons.local_fire_department_rounded, 'Calories', '${data['calories']} kcal', kWarningOrange),
+                  _MetricCard(Icons.bloodtype_rounded, 'SpO2', data['spo2'] ?? '--', kPrimaryText),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 20),
-          // Scan button
+          const SizedBox(height: 40),
+          const Text('BLUETOOTH DEVICES', style: TextStyle(color: kTertiaryText, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
+          const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () => setState(() => _scanning = !_scanning),
             icon: _scanning
                 ? RotationTransition(turns: _scanCtrl, child: const Icon(Icons.radar_rounded, color: kPrimaryText))
                 : const Icon(Icons.bluetooth_searching_rounded, color: kPrimaryText),
-            label: Text(_scanning ? 'Scanning...' : 'Scan for Devices',
+            label: Text(_scanning ? 'Scanning for devices...' : 'Scan for Devices',
                 style: const TextStyle(color: kPrimaryText)),
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: kBorder),
@@ -125,10 +111,3 @@ Widget _MetricCard(IconData icon, String label, String value, Color color) => Wi
     Text(value, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w700)),
   ]),
 );
-
-class _Wearable {
-  final String name, version, battery;
-  final IconData icon;
-  final bool connected;
-  const _Wearable(this.name, this.version, this.icon, this.connected, this.battery);
-}

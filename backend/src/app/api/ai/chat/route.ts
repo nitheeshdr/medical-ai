@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { message, sessionId } = body
+  const { message, sessionId, contextData } = body
   if (!message?.trim()) {
     return NextResponse.json({ error: 'Message is required' }, { status: 400 })
   }
@@ -60,10 +60,15 @@ export async function POST(req: NextRequest) {
   const aiClient = getAIClient()
   const model = getDefaultModel()
   const start = Date.now()
+  
+  let dynamicPrompt = SYSTEM_PROMPT
+  if (contextData) {
+    dynamicPrompt += `\n\nUser Context:\n${JSON.stringify(contextData, null, 2)}\nUse this context to inform your answers if relevant.`
+  }
 
   const stream = await aiClient.chat.completions.create({
     model,
-    messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...history],
+    messages: [{ role: 'system', content: dynamicPrompt }, ...history],
     stream: true,
     temperature: 0.6,
     top_p: 0.9,

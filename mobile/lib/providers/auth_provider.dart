@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/app_constants.dart';
@@ -135,6 +136,9 @@ class AuthController extends AsyncNotifier<void> {
   }
 
   Future<void> resetPassword(String email) async {
-    await _api.post('/auth/forgot-password', data: {'email': email});
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+    });
   }
 }

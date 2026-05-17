@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
+import '../../providers/health_data_provider.dart';
+import '../../providers/prescriptions_provider.dart';
+import '../reports/report_upload_screen.dart';
 
 // ── Chat session list provider ─────────────────────────────────────────────────
 
@@ -31,25 +34,27 @@ class _ChatMessage {
 }
 
 class _ChatNotifier extends Notifier<List<_ChatMessage>> {
-  bool _isTyping = false;
-  bool get isTyping => _isTyping;
   String _sessionId = '';
-
-  void setSession(String id) => _sessionId = id;
 
   @override
   List<_ChatMessage> build() => [
-        _ChatMessage(
-          text: "Hi! I'm MediNova AI 🩺\nAsk me anything about your health — symptoms, medications, reports, or lifestyle advice.",
-          isUser: false,
-          time: DateTime.now(),
-        ),
-      ];
+    _ChatMessage(
+      text: "Hi! I'm MediNova AI 🩺\nAsk me anything about your health — symptoms, medications, reports, or lifestyle advice.",
+      isUser: false,
+      time: DateTime.now(),
+    ),
+  ];
 
-  Future<void> sendMessage(String text) async {
+  void initSession(String id, List<_ChatMessage> initial) {
+    _sessionId = id;
+    if (initial.isNotEmpty) {
+      state = initial;
+    }
+  }
+
+  Future<void> sendMessage(String text, {Map<String, dynamic>? contextData}) async {
     if (text.trim().isEmpty) return;
     state = [...state, _ChatMessage(text: text, isUser: true, time: DateTime.now())];
-    _isTyping = true;
     state = [...state, _ChatMessage(text: '', isUser: false, time: DateTime.now())];
 
     try {
@@ -57,7 +62,11 @@ class _ChatNotifier extends Notifier<List<_ChatMessage>> {
       final dio = Dio();
       final response = await dio.post(
         '${AppConstants.baseUrl}/ai/chat',
-        data: jsonEncode({'message': text, 'sessionId': _sessionId}),
+        data: jsonEncode({
+          'message': text,
+          'sessionId': _sessionId,
+          if (contextData != null) 'contextData': contextData,
+        }),
         options: Options(
           headers: {
             'Authorization': 'Bearer $token',
@@ -74,7 +83,7 @@ class _ChatNotifier extends Notifier<List<_ChatMessage>> {
       String accumulated = '';
 
       await for (final bytes in stream) {
-        if (!ref.mounted) break;                      // ← disposed guard
+        if (!ref.mounted) break;
         for (final line in utf8.decode(bytes).split('\n')) {
           if (!line.startsWith('data: ')) continue;
           final payload = line.substring(6).trim();
@@ -82,7 +91,7 @@ class _ChatNotifier extends Notifier<List<_ChatMessage>> {
           try {
             final delta = (jsonDecode(payload) as Map<String, dynamic>)['text'] as String? ?? '';
             accumulated += delta;
-            if (!ref.mounted) break;                  // ← disposed guard
+            if (!ref.mounted) break;
             final msgs = List<_ChatMessage>.from(state);
             msgs[msgs.length - 1] = _ChatMessage(text: accumulated, isUser: false, time: DateTime.now());
             state = msgs;
@@ -94,7 +103,7 @@ class _ChatNotifier extends Notifier<List<_ChatMessage>> {
         _setLastMessage('Sorry, I didn\'t receive a response. Please try again.');
       }
     } catch (e) {
-      if (!ref.mounted) return;                       // ← disposed guard
+      if (!ref.mounted) return;
       final msg = e is DioException
           ? (e.response?.statusCode == 401
               ? 'Please sign in to use the AI chat.'
@@ -103,13 +112,11 @@ class _ChatNotifier extends Notifier<List<_ChatMessage>> {
                   : 'Connection error: ${e.message}')
           : 'Unable to reach AI. Check your connection.';
       _setLastMessage(msg);
-    } finally {
-      if (ref.mounted) _isTyping = false;             // ← disposed guard
     }
   }
 
   void _setLastMessage(String text) {
-    if (!ref.mounted) return;                         // ← disposed guard
+    if (!ref.mounted) return;
     final msgs = List<_ChatMessage>.from(state);
     msgs[msgs.length - 1] = _ChatMessage(text: text, isUser: false, time: DateTime.now());
     state = msgs;
@@ -147,16 +154,16 @@ class ChatScreen extends ConsumerWidget {
           IconButton(
             tooltip: 'New conversation',
             icon: const Icon(Icons.add_comment_rounded),
-            onPressed: () => _openChat(context, ref, null),
+            onPressed: () => _openChat(context, ref, null, []),
           ),
         ],
       ),
       body: sessions.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => _EmptyState(onNewChat: () => _openChat(context, ref, null)),
+        error: (_, __) => _EmptyState(onNewChat: () => _openChat(context, ref, null, [])),
         data: (list) {
           if (list.isEmpty) {
-            return _EmptyState(onNewChat: () => _openChat(context, ref, null));
+            return _EmptyState(onNewChat: () => _openChat(context, ref, null, []));
           }
           return RefreshIndicator(
             onRefresh: () => ref.refresh(chatSessionsProvider.future),
@@ -167,6 +174,13 @@ class ChatScreen extends ConsumerWidget {
               itemBuilder: (_, i) {
                 final s = list[i];
                 final messages = (s['messages'] as List?) ?? [];
+                
+                final initialMessages = messages.map((m) => _ChatMessage(
+                  text: m['content'] as String? ?? '',
+                  isUser: m['role'] == 'user',
+                  time: DateTime.tryParse(m['timestamp']?.toString() ?? '') ?? DateTime.now(),
+                )).toList();
+                
                 final lastMsg  = messages.isNotEmpty
                     ? (messages.last['content'] as String? ?? '')
                     : 'No messages yet';
@@ -199,13 +213,13 @@ class ChatScreen extends ConsumerWidget {
                           style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
                       const SizedBox(height: 4),
                       Badge(
-                        isLabelVisible: (messages.length > 0),
+                         isLabelVisible: messages.isNotEmpty,
                         label: Text('${messages.length}'),
                         child: const SizedBox(width: 8),
                       ),
                     ],
                   ),
-                  onTap: () => _openChat(context, ref, sessionId),
+                  onTap: () => _openChat(context, ref, sessionId, initialMessages),
                 );
               },
             ),
@@ -214,19 +228,21 @@ class ChatScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: null,
-        onPressed: () => _openChat(context, ref, null),
+        onPressed: () => _openChat(context, ref, null, []),
         icon: const Icon(Icons.add_comment_rounded),
         label: const Text('New Chat'),
       ),
     );
   }
 
-  void _openChat(BuildContext context, WidgetRef ref, String? sessionId) {
+  void _openChat(BuildContext context, WidgetRef ref, String? sessionId, List<_ChatMessage> initialMessages) {
     final sid = sessionId ?? 'session_${DateTime.now().millisecondsSinceEpoch}';
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ProviderScope(
-        overrides: [_chatProvider.overrideWith(() => _ChatNotifier()..setSession(sid))],
-        child: const _ChatConversationScreen(),
+        overrides: [_chatProvider.overrideWith(() => _ChatNotifier()..initSession(sid, initialMessages))],
+        child: _ChatConversationScreen(
+          sessionArg: {'sessionId': sid, 'messages': initialMessages},
+        ),
       ),
     )).then((_) => ref.invalidate(chatSessionsProvider));
   }
@@ -272,7 +288,8 @@ class _EmptyState extends StatelessWidget {
 // ── Conversation Screen ───────────────────────────────────────────────────────
 
 class _ChatConversationScreen extends ConsumerStatefulWidget {
-  const _ChatConversationScreen();
+  final Map<String, dynamic> sessionArg;
+  const _ChatConversationScreen({required this.sessionArg});
 
   @override
   ConsumerState<_ChatConversationScreen> createState() => _ChatConversationState();
@@ -281,6 +298,12 @@ class _ChatConversationScreen extends ConsumerStatefulWidget {
 class _ChatConversationState extends ConsumerState<_ChatConversationScreen> {
   final _ctrl       = TextEditingController();
   final _scrollCtrl = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // No need to initSession here anymore since we did it in ProviderScope override!
+  }
 
   @override
   void dispose() {
@@ -293,7 +316,31 @@ class _ChatConversationState extends ConsumerState<_ChatConversationScreen> {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
     _ctrl.clear();
-    ref.read(_chatProvider.notifier).sendMessage(text);
+    
+    // Collect context data
+    Map<String, dynamic> contextData = {};
+    
+    final healthData = ref.read(healthDataProvider).value;
+    if (healthData != null && !healthData.containsKey('error')) {
+      contextData['healthMetrics'] = healthData;
+    }
+    
+    final prescriptions = ref.read(prescriptionsProvider).value;
+    if (prescriptions != null && prescriptions.isNotEmpty) {
+      // Just take the most recent prescription's analysis to avoid token bloat
+      contextData['latestPrescription'] = prescriptions.first.aiAnalysis ?? 'No analysis available for latest prescription';
+    }
+    
+    final reports = ref.read(reportsProvider).value;
+    if (reports != null && reports.isNotEmpty) {
+      final latestReport = reports.first;
+      contextData['latestReport'] = {
+        'type': latestReport['documentType'],
+        'analysis': latestReport['aiAnalysis']
+      };
+    }
+    
+    ref.read(_chatProvider.notifier).sendMessage(text, contextData: contextData.isNotEmpty ? contextData : null);
     Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
   }
 
@@ -355,11 +402,8 @@ class _ChatConversationState extends ConsumerState<_ChatConversationScreen> {
             child: ListView.builder(
               controller: _scrollCtrl,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              itemCount: messages.length + (notifier.isTyping ? 1 : 0),
+              itemCount: messages.length,
               itemBuilder: (_, i) {
-                if (notifier.isTyping && i == messages.length) {
-                  return _TypingBubble();
-                }
                 final msg = messages[i];
                 return _MessageBubble(message: msg);
               },

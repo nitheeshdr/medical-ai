@@ -54,8 +54,21 @@ class _TrackingScreenState extends State<TrackingScreen> {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          // In a real app we would POST to /health-metrics here
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Health tracking saved successfully ✓'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+        icon: const Icon(Icons.save_rounded),
+        label: const Text('Save'),
+      ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100), // increased bottom padding
         children: [
           _buildWaterCard(cs, tt),
           const SizedBox(height: 14),

@@ -228,13 +228,15 @@ class _UploadSheetState extends ConsumerState<_UploadSheet> {
       final api    = ref.read(apiClientProvider);
       final bytes  = await File(path).readAsBytes();
       final b64    = base64Encode(bytes);
+      final isImage = path.toLowerCase().endsWith('.jpg') || path.toLowerCase().endsWith('.jpeg') || path.toLowerCase().endsWith('.png');
+      final mime = isImage ? 'image/jpeg' : 'application/pdf';
 
       // 1. Create report record
       final createRes = await api.post('/reports', data: {
         'type':     _selectedType,
         'fileName': file.name,
         'fileSize': file.size,
-        'fileUrl':  'data:application/pdf;base64,${b64.substring(0, b64.length.clamp(0, 100))}',
+        'fileUrl':  'data:$mime;base64,${b64.substring(0, b64.length.clamp(0, 100))}', // store reference only
       });
       final reportId = (createRes.data as Map<String, dynamic>)['data']?['_id']
           ?? (createRes.data as Map<String, dynamic>)['_id'] as String? ?? '';
@@ -243,6 +245,8 @@ class _UploadSheetState extends ConsumerState<_UploadSheet> {
       if (reportId.isNotEmpty) {
         await api.post('/reports/analyze', data: {
           'reportId':      reportId,
+          'imageBase64':   b64,
+          'mimeType':      mime,
           'extractedText': 'Report type: $_selectedType\nFile: ${file.name}\nSize: ${file.size} bytes',
         });
       }
@@ -257,7 +261,17 @@ class _UploadSheetState extends ConsumerState<_UploadSheet> {
         );
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Upload failed: ${e.toString().substring(0, 80)}');
+      if (mounted) {
+        String errMsg = 'Upload failed: ${e.toString().substring(0, e.toString().length.clamp(0, 80))}';
+        if (e is DioException) {
+          if (e.response?.statusCode == 500) {
+            errMsg = 'Connection error 500: Server encountered an error during upload or analysis.';
+          } else if (e.response?.statusCode != null) {
+            errMsg = 'Upload failed with status ${e.response?.statusCode}. Please try again.';
+          }
+        }
+        setState(() => _error = errMsg);
+      }
     } finally {
       if (mounted) setState(() => _uploading = false);
     }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/network/api_client.dart';
 
 class SecurityScreen extends ConsumerStatefulWidget {
@@ -9,9 +10,22 @@ class SecurityScreen extends ConsumerStatefulWidget {
 }
 
 class _SecurityScreenState extends ConsumerState<SecurityScreen> {
-  bool _biometric   = true;
+  bool _biometric   = false;
   bool _twoFactor   = false;
   bool _loginAlerts = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _biometric = prefs.getBool('use_biometrics') ?? false;
+    });
+  }
 
   // ── Change Password ──────────────────────────────────────────────────────────
 
@@ -239,7 +253,9 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
               title: const Text('Biometric Login', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               subtitle: Text('Face ID / Touch ID', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
               value: _biometric,
-              onChanged: (v) {
+              onChanged: (v) async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('use_biometrics', v);
                 setState(() => _biometric = v);
                 _snack(v ? '✓ Biometrics enabled' : 'Biometrics disabled', success: v);
               },
