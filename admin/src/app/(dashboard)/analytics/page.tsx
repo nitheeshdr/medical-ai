@@ -29,7 +29,7 @@ export default async function AnalyticsPage() {
         <h1 className="text-xl font-bold text-white">Analytics</h1>
         <p className="text-secondary text-sm mt-0.5">
           Platform metrics — last 30 days
-          {!data && <span className="ml-2 text-error text-xs">(backend offline)</span>}
+          {!data && <span className="ml-2 text-danger text-xs">(backend offline)</span>}
         </p>
       </div>
 

@@ -1,24 +1,38 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard, Users, UserCog, BarChart3,
-  CreditCard, Brain, Bell, Settings, Stethoscope,
+  LayoutDashboard, Users, BarChart3, CreditCard,
+  Brain, Bell, Settings, Stethoscope, LogOut,
 } from 'lucide-react'
+import { useState } from 'react'
 
 const NAV = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Users', href: '/users', icon: Users },
-  { label: 'Doctors', href: '/doctors', icon: Stethoscope },
-  { label: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { label: 'Dashboard',     href: '/dashboard',     icon: LayoutDashboard },
+  { label: 'Users',         href: '/users',         icon: Users },
+  { label: 'Doctors',       href: '/doctors',       icon: Stethoscope },
+  { label: 'Analytics',     href: '/analytics',     icon: BarChart3 },
   { label: 'Subscriptions', href: '/subscriptions', icon: CreditCard },
-  { label: 'AI Usage', href: '/ai-usage', icon: Brain },
+  { label: 'AI Usage',      href: '/ai-usage',      icon: Brain },
   { label: 'Notifications', href: '/notifications', icon: Bell },
-  { label: 'Settings', href: '/settings', icon: Settings },
+  { label: 'Settings',      href: '/settings',      icon: Settings },
 ]
 
 export function Sidebar() {
   const path = usePathname()
+  const router = useRouter()
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  const handleLogout = async () => {
+    setLoggingOut(true)
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } finally {
+      // Clear cookie client-side too as a fallback
+      document.cookie = 'admin_token=; path=/; max-age=0; SameSite=Strict'
+      router.replace('/login')
+    }
+  }
 
   return (
     <aside className="w-56 flex-shrink-0 flex flex-col bg-surface border-r border-border">
@@ -49,16 +63,26 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
+      {/* Footer with logout */}
       <div className="p-4 border-t border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-elevated flex items-center justify-center">
-            <UserCog size={14} className="text-secondary" />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-full bg-elevated border border-border flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+              A
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-white font-medium truncate">Admin</p>
+              <p className="text-xs text-tertiary">medinova.ai</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-white font-medium">Admin</p>
-            <p className="text-xs text-tertiary">admin@medinova.ai</p>
-          </div>
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            title="Sign out"
+            className="p-1.5 text-secondary hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+          >
+            <LogOut size={14} className={loggingOut ? 'animate-pulse' : ''} />
+          </button>
         </div>
       </div>
     </aside>
