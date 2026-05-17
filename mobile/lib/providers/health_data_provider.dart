@@ -29,7 +29,11 @@ final healthDataProvider = FutureProvider<Map<String, String>>((ref) async {
       }
     }
 
-    final healthData = await health.getHealthDataFromTypes(yesterday, now, types);
+    final healthData = await health.getHealthDataFromTypes(
+      startTime: yesterday,
+      endTime: now,
+      types: types,
+    );
     healthData.sort((a, b) => b.dateTo.compareTo(a.dateTo));
 
     int steps = 0;
