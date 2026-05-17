@@ -10,18 +10,15 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check for admin token in cookie (set on login) or legacy ADMIN_TOKEN env header
+  // Only the cookie set at login time authenticates the browser session
   const cookieToken = req.cookies.get('admin_token')?.value
-  const envToken = process.env.ADMIN_TOKEN
-
-  if (!cookieToken && !envToken) {
+  if (!cookieToken) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  // Forward the active token to backend-proxy API routes via header
-  const token = cookieToken ?? envToken
+  // Forward the cookie token to server-side API routes via header
   const res = NextResponse.next()
-  res.headers.set('x-admin-token', token!)
+  res.headers.set('x-admin-token', cookieToken)
   return res
 }
 
