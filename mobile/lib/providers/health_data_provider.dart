@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health/health.dart';
 
-final healthFactoryProvider = Provider<HealthFactory>((ref) {
-  return HealthFactory();
+final healthFactoryProvider = Provider<Health>((ref) {
+  return Health();
 });
 
 final healthDataProvider = FutureProvider<Map<String, String>>((ref) async {

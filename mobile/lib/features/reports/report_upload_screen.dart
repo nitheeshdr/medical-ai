@@ -8,6 +8,7 @@ import '../../core/network/api_client.dart';
 import '../../routes/route_names.dart';
 import '../../shared/widgets/wise/wise_badge.dart';
 import '../../shared/widgets/wise/wise_card.dart';
+import 'package:dio/dio.dart';
 
 // ── Reports provider ───────────────────────────────────────────────────────────
 

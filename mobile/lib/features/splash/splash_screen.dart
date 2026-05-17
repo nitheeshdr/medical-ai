@@ -52,7 +52,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           try {
             final authenticated = await localAuth.authenticate(
               localizedReason: 'Please authenticate to access MediNova AI',
-              options: const AuthenticationOptions(stickyAuth: true, biometricOnly: false),
             );
             if (authenticated && mounted) {
               context.go(RouteNames.dashboard);
