@@ -6,19 +6,30 @@ import { AIUsageLog } from '@/models/AIUsageLog'
 import { Report } from '@/models/Report'
 import { Prescription } from '@/models/Prescription'
 import { Appointment } from '@/models/Appointment'
-import { withRole, ok, err } from '@/lib/middleware'
+import { withRole, AuthUser, ok, err } from '@/lib/middleware'
 
-export const GET = withRole('admin')(async (_req: NextRequest, { params }: { params: { id: string } }) => {
+export const GET = withRole('admin')(async (req: NextRequest, _user: AuthUser) => {
   try {
     await connectDB()
-    const { id } = params
+
+    // Extract id from URL path: /api/admin/users/[id]
+    const segments = req.nextUrl.pathname.split('/')
+    const id = segments[segments.length - 1]
+    if (!id) return err('User ID required')
 
     const [user, sub, aiLogs, reports, prescriptions, appointments] = await Promise.all([
       User.findById(id).select('-passwordHash').lean(),
       Subscription.findOne({ userId: id }).lean(),
       AIUsageLog.aggregate([
         { $match: { userId: id } },
-        { $group: { _id: null, totalTokens: { $sum: '$tokensUsed' }, totalCost: { $sum: '$cost' }, requests: { $sum: 1 } } },
+        {
+          $group: {
+            _id: null,
+            totalTokens: { $sum: '$tokensUsed' },
+            totalCost: { $sum: '$cost' },
+            requests: { $sum: 1 },
+          },
+        },
       ]),
       Report.find({ userId: id }).sort({ createdAt: -1 }).limit(20).lean(),
       Prescription.find({ userId: id }).sort({ createdAt: -1 }).limit(10).lean(),
@@ -35,7 +46,7 @@ export const GET = withRole('admin')(async (_req: NextRequest, { params }: { par
         plan: sub?.plan ?? 'free',
         subscriptionStatus: sub?.status ?? 'inactive',
         subscriptionStart: sub?.createdAt ?? null,
-        subscriptionRenewal: sub?.currentPeriodEnd ?? null,
+        subscriptionRenewal: (sub as Record<string, unknown>)?.currentPeriodEnd ?? null,
         aiRequests: ai.requests,
         aiTokens: ai.totalTokens,
         aiCost: Number(ai.totalCost.toFixed(4)),
