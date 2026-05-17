@@ -1,93 +1,232 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/network/api_client.dart';
+import '../../routes/route_names.dart';
 
-class TimelineScreen extends StatelessWidget {
+// Fetches user's medical timeline from the backend
+final timelineProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.read(apiClientProvider);
+  try {
+    final res = await api.get('/timeline');
+    final data = res.data as Map<String, dynamic>;
+    final list = data['events'] as List? ?? [];
+    return list.cast<Map<String, dynamic>>();
+  } catch (_) {
+    return [];
+  }
+});
+
+class TimelineScreen extends ConsumerWidget {
   const TimelineScreen({super.key});
 
-  static const _events = [
-    _Event('Blood Test Results', 'All markers within normal range. Vitamin D slightly low.', 'May 10, 2026', Icons.science_rounded, kSuccessGreen, 'Lab Report'),
-    _Event('Doctor Visit', 'Annual checkup with Dr. Johnson. BP 118/78, healthy weight.', 'Apr 28, 2026', Icons.medical_services_rounded, kPrimaryText, 'Appointment'),
-    _Event('Prescription Added', 'Vitamin D3 2000 IU — 3 months course started', 'Apr 28, 2026', Icons.medication_rounded, kWarningOrange, 'Prescription'),
-    _Event('MRI Scan', 'Lumbar spine MRI — no abnormalities detected', 'Mar 15, 2026', Icons.biotech_rounded, kPrimaryText, 'Imaging'),
-    _Event('Emergency Visit', 'Severe allergic reaction. Treated with antihistamines. Penicillin allergy confirmed.', 'Feb 3, 2026', Icons.emergency_rounded, kErrorRed, 'Emergency'),
-    _Event('Vaccination', 'Flu vaccine administered. Annual booster complete.', 'Jan 20, 2026', Icons.vaccines_rounded, kSuccessGreen, 'Vaccine'),
-    _Event('ECG Report', 'Normal sinus rhythm. No cardiac abnormalities.', 'Dec 12, 2025', Icons.monitor_heart_rounded, kSuccessGreen, 'Lab Report'),
-  ];
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final timelineAsync = ref.watch(timelineProvider);
+
     return Scaffold(
-      backgroundColor: kBackground,
-      appBar: AppBar(title: const Text('Medical Timeline'), backgroundColor: kBackground, foregroundColor: kPrimaryText),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _events.length,
-        itemBuilder: (_, i) => _TimelineItem(event: _events[i], isLast: i == _events.length - 1),
+      appBar: AppBar(
+        title: const Text('Medical Timeline'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => ref.invalidate(timelineProvider),
+          ),
+        ],
+      ),
+      body: timelineAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, __) => _EmptyTimeline(cs: cs, tt: tt),
+        data: (events) => events.isEmpty
+            ? _EmptyTimeline(cs: cs, tt: tt)
+            : ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                itemCount: events.length,
+                itemBuilder: (_, i) => _TimelineItem(
+                  event: events[i],
+                  isLast: i == events.length - 1,
+                  cs: cs,
+                  tt: tt,
+                ),
+              ),
       ),
     );
   }
 }
 
-class _TimelineItem extends StatelessWidget {
-  final _Event event;
-  final bool isLast;
-  const _TimelineItem({required this.event, required this.isLast});
-
-  @override
-  Widget build(BuildContext context) => IntrinsicHeight(
-    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Timeline spine
-      SizedBox(width: 40, child: Column(children: [
-        Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(
-            color: event.color.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-            border: Border.all(color: event.color.withValues(alpha: 0.4)),
-          ),
-          child: Icon(event.icon, color: event.color, size: 18),
-        ),
-        if (!isLast) Expanded(child: Container(
-          width: 2, margin: const EdgeInsets.symmetric(vertical: 4),
-          color: kBorder,
-        )),
-      ])),
-      const SizedBox(width: 14),
-      // Content
-      Expanded(child: Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: kSurface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kBorder),
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Text(event.title,
-                  style: const TextStyle(color: kPrimaryText, fontSize: 14, fontWeight: FontWeight.w600))),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: kElevated, borderRadius: BorderRadius.circular(8)),
-                child: Text(event.category,
-                    style: const TextStyle(color: kSecondaryText, fontSize: 10, fontWeight: FontWeight.w500)),
-              ),
-            ]),
-            const SizedBox(height: 6),
-            Text(event.description, style: const TextStyle(color: kSecondaryText, fontSize: 12, height: 1.4)),
-            const SizedBox(height: 8),
-            Text(event.date, style: const TextStyle(color: kTertiaryText, fontSize: 11)),
-          ]),
-        ),
-      )),
-    ]),
-  );
+// Maps backend event type strings to icons and colours
+IconData _iconFor(String type) {
+  switch (type.toLowerCase()) {
+    case 'report':
+    case 'lab':
+      return Icons.science_rounded;
+    case 'appointment':
+    case 'visit':
+      return Icons.medical_services_rounded;
+    case 'prescription':
+      return Icons.medication_rounded;
+    case 'imaging':
+    case 'mri':
+    case 'xray':
+    case 'ct':
+      return Icons.biotech_rounded;
+    case 'emergency':
+      return Icons.emergency_rounded;
+    case 'vaccine':
+    case 'vaccination':
+      return Icons.vaccines_rounded;
+    case 'ecg':
+      return Icons.monitor_heart_rounded;
+    default:
+      return Icons.health_and_safety_rounded;
+  }
 }
 
-class _Event {
-  final String title, description, date, category;
-  final IconData icon;
-  final Color color;
-  const _Event(this.title, this.description, this.date, this.icon, this.color, this.category);
+Color _colorFor(String type, ColorScheme cs) {
+  switch (type.toLowerCase()) {
+    case 'emergency':
+      return cs.error;
+    case 'appointment':
+    case 'visit':
+      return cs.primary;
+    case 'prescription':
+      return cs.tertiary;
+    default:
+      return cs.secondary;
+  }
+}
+
+class _TimelineItem extends StatelessWidget {
+  final Map<String, dynamic> event;
+  final bool isLast;
+  final ColorScheme cs;
+  final TextTheme tt;
+  const _TimelineItem({required this.event, required this.isLast, required this.cs, required this.tt});
+
+  @override
+  Widget build(BuildContext context) {
+    final title = event['title'] as String? ?? 'Event';
+    final description = event['description'] as String? ?? '';
+    final category = event['category'] as String? ?? event['type'] as String? ?? '';
+    final dateRaw = event['date'] as String? ?? event['createdAt'] as String? ?? '';
+    final dateStr = dateRaw.isNotEmpty ? _fmtDate(dateRaw) : '';
+    final color = _colorFor(category, cs);
+    final icon = _iconFor(category);
+
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Spine
+        SizedBox(width: 44, child: Column(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withValues(alpha: 0.4)),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          if (!isLast)
+            Expanded(child: Container(
+              width: 2,
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              color: cs.outlineVariant,
+            )),
+        ])),
+        const SizedBox(width: 12),
+        // Card
+        Expanded(child: Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Card.outlined(
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(child: Text(title,
+                      style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+                  if (category.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(category,
+                          style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+                    ),
+                ]),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(description,
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant, height: 1.4)),
+                ],
+                if (dateStr.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(dateStr, style: tt.labelSmall?.copyWith(color: cs.outline)),
+                ],
+              ]),
+            ),
+          ),
+        )),
+      ]),
+    );
+  }
+
+  String _fmtDate(String iso) {
+    try {
+      final d = DateTime.parse(iso);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return '${months[d.month - 1]} ${d.day}, ${d.year}';
+    } catch (_) {
+      return iso;
+    }
+  }
+}
+
+class _EmptyTimeline extends StatelessWidget {
+  final ColorScheme cs;
+  final TextTheme tt;
+  const _EmptyTimeline({required this.cs, required this.tt});
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        CircleAvatar(
+          radius: 40,
+          backgroundColor: cs.surfaceContainerHighest,
+          child: Icon(Icons.history_rounded, size: 36, color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(height: 20),
+        Text('No medical history yet', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Text(
+          'Your timeline will populate as you upload reports, scan prescriptions, and book appointments.',
+          textAlign: TextAlign.center,
+          style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
+        ),
+        const SizedBox(height: 24),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          OutlinedButton.icon(
+            icon: const Icon(Icons.upload_file_rounded, size: 16),
+            label: const Text('Upload Report'),
+            onPressed: () => context.push(RouteNames.reports),
+            style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          ),
+          const SizedBox(width: 10),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.document_scanner_outlined, size: 16),
+            label: const Text('Scan Rx'),
+            onPressed: () => context.push(RouteNames.scanner),
+            style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          ),
+        ]),
+      ]),
+    ),
+  );
 }
