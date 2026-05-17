@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../routes/route_names.dart';
 import '../../shared/widgets/wise/wise_badge.dart';
 import '../../shared/widgets/wise/wise_card.dart';
-import '../../shared/widgets/wise/wise_stat_card.dart';
 import '../appointments/appointment_list_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -19,14 +17,20 @@ class DashboardScreen extends ConsumerWidget {
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
     final bloodType  = user?['bloodType']  as String? ?? '';
     final conditions = (user?['conditions'] as List?)?.cast<String>() ?? [];
+    final primaryGoal = user?['primaryGoal'] as String? ?? '';
+    final profileComplete = user?['profileComplete'] as bool? ?? false;
 
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
+    // Greeting based on time of day
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // ── M3 Large App Bar ───────────────────────────────────────────────
+          // ── M3 Large App Bar ──────────────────────────────────────────────
           SliverAppBar.large(
             backgroundColor: cs.surface,
             surfaceTintColor: cs.surfaceTint,
@@ -34,7 +38,7 @@ class DashboardScreen extends ConsumerWidget {
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Good morning, $name 👋',
+                Text('$greeting, $name 👋',
                     style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
                 Text('How are you feeling today?',
                     style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
@@ -68,52 +72,42 @@ class DashboardScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
             sliver: SliverList.list(children: [
 
-              // ── Health score hero ─────────────────────────────────────────
-              _HealthHeroCard(bloodType: bloodType, conditions: conditions),
+              // ── Profile incomplete banner ────────────────────────────────
+              if (!profileComplete) ...[
+                _ProfileCompleteBanner(cs: cs, tt: tt),
+                const SizedBox(height: 16),
+              ],
+
+              // ── Health profile card (real data, no hardcoded score) ──────
+              _HealthProfileCard(bloodType: bloodType, conditions: conditions, primaryGoal: primaryGoal),
               const SizedBox(height: 24),
 
-              // ── Quick actions ─────────────────────────────────────────────
+              // ── Quick actions ────────────────────────────────────────────
               Text('Quick Actions', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
-              _QuickActions(),
+              const _QuickActions(),
               const SizedBox(height: 24),
 
-              // ── Today's metrics ───────────────────────────────────────────
-              Text("Today's Metrics", style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.5,
-                children: const [
-                  WiseStatCard(label: 'Heart Rate',  value: '72 bpm',  icon: Icons.favorite_rounded,        accentColor: kErrorRed,     change: -2.1),
-                  WiseStatCard(label: 'Steps Today', value: '6,240',   icon: Icons.directions_walk_rounded, accentColor: kSuccessGreen, change: 8.4),
-                  WiseStatCard(label: 'Water Intake',value: '6 / 8',   icon: Icons.water_drop_outlined,     accentColor: kAccent,       change: null),
-                  WiseStatCard(label: 'Sleep',       value: '7.5 hrs', icon: Icons.bedtime_outlined,        accentColor: Color(0xFF8B5CF6), change: 4.2),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // ── AI Insight banner ─────────────────────────────────────────
-              _AIInsightBanner(),
-              const SizedBox(height: 24),
-
-              // ── Recent Activity ───────────────────────────────────────────
+              // ── Today's vitals — user-entered, no hardcoded numbers ──────
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('Recent Activity', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                TextButton(onPressed: () {}, child: const Text('See all')),
+                Text("Today's Vitals", style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                TextButton(
+                  onPressed: () => context.push(RouteNames.healthTracking),
+                  child: const Text('Log vitals'),
+                ),
               ]),
               const SizedBox(height: 8),
-              _RecentActivity(),
+              const _VitalsEmptyState(),
               const SizedBox(height: 24),
 
-              // ── Upcoming appointment ──────────────────────────────────────
+              // ── AI insight — goal-aware, no hardcoded text ───────────────
+              _AIGoalBanner(goal: primaryGoal, cs: cs, tt: tt),
+              const SizedBox(height: 24),
+
+              // ── Upcoming appointment ─────────────────────────────────────
               Text('Next Appointment', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
-              _UpcomingAppointment(),
+              const _UpcomingAppointment(),
             ]),
           ),
         ],
@@ -122,17 +116,62 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-// ── Health hero card ──────────────────────────────────────────────────────────
+// ── Profile incomplete banner ─────────────────────────────────────────────────
 
-class _HealthHeroCard extends StatelessWidget {
+class _ProfileCompleteBanner extends StatelessWidget {
+  final ColorScheme cs;
+  final TextTheme tt;
+  const _ProfileCompleteBanner({required this.cs, required this.tt});
+
+  @override
+  Widget build(BuildContext context) => Card(
+    elevation: 0,
+    color: cs.tertiaryContainer,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(children: [
+        Icon(Icons.person_outline_rounded, color: cs.onTertiaryContainer),
+        const SizedBox(width: 12),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Complete your health profile', style: tt.labelLarge?.copyWith(
+                color: cs.onTertiaryContainer, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            Text('Add your blood type, conditions & goals for personalised AI insights.',
+                style: tt.bodySmall?.copyWith(color: cs.onTertiaryContainer)),
+          ],
+        )),
+        const SizedBox(width: 8),
+        FilledButton.tonal(
+          onPressed: () => context.push(RouteNames.profileSetup),
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text('Set up'),
+        ),
+      ]),
+    ),
+  );
+}
+
+// ── Health profile card (no hardcoded score) ──────────────────────────────────
+
+class _HealthProfileCard extends StatelessWidget {
   final String bloodType;
   final List<String> conditions;
-  const _HealthHeroCard({this.bloodType = '', this.conditions = const []});
+  final String primaryGoal;
+  const _HealthProfileCard({this.bloodType = '', this.conditions = const [], this.primaryGoal = ''});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+
+    final hasData = bloodType.isNotEmpty || conditions.isNotEmpty || primaryGoal.isNotEmpty;
 
     return Card(
       elevation: 0,
@@ -140,45 +179,48 @@ class _HealthHeroCard extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Row(
+        child: hasData
+            ? Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Score ring
-            SizedBox(
-              width: 80, height: 80,
-              child: Stack(alignment: Alignment.center, children: [
-                CircularProgressIndicator(
-                  value: 0.82,
-                  strokeWidth: 8,
-                  backgroundColor: cs.primary.withValues(alpha: 0.2),
-                  valueColor: AlwaysStoppedAnimation(cs.primary),
-                ),
-                Text('82', style: tt.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800, color: cs.onPrimaryContainer)),
-              ]),
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: cs.primary.withValues(alpha: 0.15),
+              child: Icon(Icons.health_and_safety_rounded, color: cs.primary, size: 30),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Health Score', style: tt.bodySmall?.copyWith(color: cs.onPrimaryContainer.withValues(alpha: 0.7))),
-                  Text('82 / 100', style: tt.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800, color: cs.onPrimaryContainer)),
+                  Text('Your Health Profile',
+                      style: tt.bodySmall?.copyWith(color: cs.onPrimaryContainer.withValues(alpha: 0.7))),
                   const SizedBox(height: 4),
-                  Text('Excellent — keep it up!', style: tt.bodySmall?.copyWith(
-                      color: cs.onPrimaryContainer.withValues(alpha: 0.8))),
-                  const SizedBox(height: 12),
-                  Wrap(spacing: 8, children: [
-                    _Pill(label: '↑ 3% this week', cs: cs),
-                    if (bloodType.isNotEmpty) _Pill(label: bloodType, cs: cs),
-                    if (conditions.isNotEmpty && conditions.first != 'None')
+                  Wrap(spacing: 8, runSpacing: 6, children: [
+                    if (bloodType.isNotEmpty) _Pill(label: 'Blood: $bloodType', cs: cs),
+                    if (primaryGoal.isNotEmpty) _Pill(label: primaryGoal, cs: cs),
+                    if (conditions.isNotEmpty && conditions.first != 'None of the above')
                       _Pill(label: conditions.first, cs: cs),
                   ]),
                 ],
               ),
             ),
           ],
-        ),
+        )
+            : Row(children: [
+          Icon(Icons.info_outline, color: cs.onPrimaryContainer.withValues(alpha: 0.6), size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Complete your profile to unlock personalised AI insights.',
+              style: tt.bodySmall?.copyWith(color: cs.onPrimaryContainer),
+            ),
+          ),
+          TextButton(
+            onPressed: () => context.push(RouteNames.profileSetup),
+            child: const Text('Set up'),
+          ),
+        ]),
       ),
     );
   }
@@ -205,11 +247,13 @@ class _Pill extends StatelessWidget {
 
 class _QuickActions extends StatelessWidget {
   static const _items = [
-    (Icons.document_scanner_outlined, 'Scan Rx',   RouteNames.scanner),
-    (Icons.upload_file_outlined,       'Reports',   RouteNames.reports),
-    (Icons.video_call_outlined,        'Consult',   RouteNames.doctorList),
-    (Icons.spa_outlined,               'Wellness',  RouteNames.wellness),
+    (Icons.document_scanner_outlined, 'Scan Rx',  RouteNames.scanner),
+    (Icons.upload_file_outlined,      'Reports',  RouteNames.reports),
+    (Icons.video_call_outlined,       'Consult',  RouteNames.doctorList),
+    (Icons.spa_outlined,              'Wellness', RouteNames.wellness),
   ];
+
+  const _QuickActions();
 
   @override
   Widget build(BuildContext context) {
@@ -251,17 +295,68 @@ class _QuickActions extends StatelessWidget {
   }
 }
 
-// ── AI Insight banner ─────────────────────────────────────────────────────────
+// ── Vitals empty state (no hardcoded numbers) ─────────────────────────────────
 
-class _AIInsightBanner extends StatelessWidget {
+class _VitalsEmptyState extends StatelessWidget {
+  const _VitalsEmptyState();
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    return Card(
-      color: cs.secondaryContainer,
-      elevation: 0,
+    return Card.outlined(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: () => context.push(RouteNames.healthTracking),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(children: [
+            CircleAvatar(
+              backgroundColor: cs.surfaceContainerHighest,
+              child: Icon(Icons.monitor_heart_outlined, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('No vitals logged today', style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                Text('Tap to log water, sleep, heart rate & more',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+              ]),
+            ),
+            Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ── AI goal banner (goal-aware, not hardcoded) ────────────────────────────────
+
+class _AIGoalBanner extends StatelessWidget {
+  final String goal;
+  final ColorScheme cs;
+  final TextTheme tt;
+  const _AIGoalBanner({required this.goal, required this.cs, required this.tt});
+
+  String get _insight {
+    if (goal.isEmpty) return 'Complete your health profile to get personalised AI insights tailored to your goals.';
+    if (goal.contains('sleep')) return 'To improve sleep quality, try a consistent bedtime routine and avoid screens 30 min before bed.';
+    if (goal.contains('weight') || goal.contains('fitness')) return 'Combining 30 min of daily walking with a balanced diet is the most effective first step toward your goal.';
+    if (goal.contains('stress')) return 'Even 5 minutes of deep breathing reduces cortisol. Try it before your next stressful meeting.';
+    if (goal.contains('condition') || goal.contains('chronic')) return 'Consistent tracking is key for managing chronic conditions. Logging vitals daily helps your doctor too.';
+    return 'Based on your goal "$goal" — tap to chat with MediNova AI for personalised advice.';
+  }
+
+  @override
+  Widget build(BuildContext context) => Card(
+    color: cs.secondaryContainer,
+    elevation: 0,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    child: InkWell(
+      onTap: () => context.push(RouteNames.chatbot),
+      borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(children: [
@@ -276,105 +371,64 @@ class _AIInsightBanner extends StatelessWidget {
               Text('AI Insight', style: tt.labelLarge?.copyWith(
                   color: cs.onSecondaryContainer, fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
-              Text('Your sleep improved 4.2% this week. Reduce caffeine after 3 PM.',
-                  style: tt.bodySmall?.copyWith(color: cs.onSecondaryContainer)),
+              Text(_insight, style: tt.bodySmall?.copyWith(color: cs.onSecondaryContainer, height: 1.5)),
             ],
           )),
           Icon(Icons.chevron_right, color: cs.onSecondaryContainer),
         ]),
       ),
-    );
-  }
-}
-
-// ── Recent activity ───────────────────────────────────────────────────────────
-
-class _RecentActivity extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      (Icons.analytics_outlined,      'Blood Report Analyzed', 'AI found 2 highlights', '2h ago',   WiseBadgeType.info),
-      (Icons.medication_outlined,     'Metformin Taken',       'With breakfast',         '8:00 AM',  WiseBadgeType.success),
-      (Icons.calendar_month_outlined, 'Dr. Sarah Johnson',     'Tomorrow 3:00 PM',       'Tomorrow', WiseBadgeType.warning),
-    ];
-
-    return WiseCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: items.asMap().entries.map((e) {
-          final item  = e.value;
-          final isLast = e.key == items.length - 1;
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: Icon(item.$1, size: 20),
-                ),
-                title: Text(item.$2, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                subtitle: Text(item.$3),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(item.$4, style: Theme.of(context).textTheme.bodySmall),
-                    const SizedBox(height: 4),
-                    WiseBadge(label: item.$4 == '2h ago' ? 'New' : item.$4 == 'Tomorrow' ? 'Soon' : 'Done',
-                        type: item.$5),
-                  ],
-                ),
-              ),
-              if (!isLast) const Divider(height: 0, indent: 70),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
+    ),
+  );
 }
 
 // ── Upcoming appointment ──────────────────────────────────────────────────────
 
 class _UpcomingAppointment extends ConsumerWidget {
+  const _UpcomingAppointment();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appts = ref.watch(upcomingAppointmentsProvider);
 
     return appts.when(
       loading: () => const LinearProgressIndicator(),
-      error: (_, __) => _StaticAppointmentCard(),
-      data: (list) => list.isEmpty
-          ? _StaticAppointmentCard()
-          : _AppointmentTile(appt: list.first),
+      error: (_, __) => _NoAppointmentCard(),
+      data: (list) => list.isEmpty ? _NoAppointmentCard() : _AppointmentTile(appt: list.first),
     );
   }
 }
 
-class _StaticAppointmentCard extends StatelessWidget {
+class _NoAppointmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return WiseCard(
-      onTap: () => context.push(RouteNames.appointments),
-      child: Row(children: [
-        CircleAvatar(
-          radius: 26,
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-          child: Icon(Icons.calendar_month_outlined,
-              color: Theme.of(context).colorScheme.primary),
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Card.outlined(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: () => context.push(RouteNames.doctorList),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(children: [
+            CircleAvatar(
+              radius: 26,
+              backgroundColor: cs.surfaceContainerHighest,
+              child: Icon(Icons.calendar_month_outlined, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(width: 14),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('No upcoming appointments', style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+                Text('Tap to find a doctor and book a consultation',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+              ],
+            )),
+            Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+          ]),
         ),
-        const SizedBox(width: 14),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Dr. Sarah Johnson',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-            Text('General Physician · Tomorrow 3:00 PM',
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
-          ],
-        )),
-        WiseBadge(label: 'Confirmed', type: WiseBadgeType.success),
-      ]),
+      ),
     );
   }
 }
@@ -400,7 +454,7 @@ class _AppointmentTile extends StatelessWidget {
           children: [
             Text(appt['doctorName'] as String? ?? 'Doctor',
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-            Text(appt['specialty'] as String? ?? '',
+            Text('${appt['specialty'] ?? ''} · ${appt['scheduledAt'] ?? ''}',
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
           ],
         )),

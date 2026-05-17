@@ -1,14 +1,53 @@
-import '../../shared/widgets/wise/wise_button.dart';
-import '../../shared/widgets/wise/wise_card.dart';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../routes/route_names.dart';
 
+// ─── Onboarding — 4 concise feature slides ────────────────────────────────────
+// Replaces the old 10-slide carousel that had no data collection.
+// After the last slide, the user is taken to Login (or ProfileSetup after sign-up).
+// ─────────────────────────────────────────────────────────────────────────────
 
+class _SlideData {
+  final IconData icon;
+  final Color iconBg;
+  final String headline;
+  final String body;
+  const _SlideData({
+    required this.icon,
+    required this.iconBg,
+    required this.headline,
+    required this.body,
+  });
+}
+
+const _slides = [
+  _SlideData(
+    icon: Icons.psychology_rounded,
+    iconBg: Color(0xFF1A3A5C),
+    headline: 'Your AI Health Companion',
+    body: 'Ask medical questions, check symptoms, scan prescriptions, and get plain-English explanations of your lab reports — all in one place.',
+  ),
+  _SlideData(
+    icon: Icons.document_scanner_rounded,
+    iconBg: Color(0xFF1A3A3A),
+    headline: 'Instant Rx & Report Analysis',
+    body: 'Point your camera at any prescription or medical report. MediNova reads it, flags interactions, and explains every term in seconds.',
+  ),
+  _SlideData(
+    icon: Icons.monitor_heart_rounded,
+    iconBg: Color(0xFF3A1A2C),
+    headline: 'Track Every Vital, Every Day',
+    body: 'Log water, sleep, steps, heart rate, and blood pressure. Connect a wearable or enter readings manually — your health timeline builds itself.',
+  ),
+  _SlideData(
+    icon: Icons.family_restroom_rounded,
+    iconBg: Color(0xFF1A3A1A),
+    headline: 'Care for Your Whole Family',
+    body: 'Add family members, manage their medications, book doctor consultations, and activate one-tap SOS for emergencies — all from one account.',
+  ),
+];
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -18,21 +57,8 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final _pageCtrl = PageController();
-  int _currentPage = 0;
-
-  static const _pages = [
-    _OnboardingData('AI Healthcare', 'Your personal AI doctor available 24/7 for smart health guidance.', Icons.psychology_rounded),
-    _OnboardingData('Prescription Scanner', 'Scan any prescription with your camera. AI reads and explains every medicine.', Icons.document_scanner_rounded),
-    _OnboardingData('Medical Reports', 'Upload blood tests, MRIs, and X-rays. Get instant AI-powered explanations.', Icons.analytics_rounded),
-    _OnboardingData('AI Chatbot', 'Chat with our medical AI assistant for symptom checking and health advice.', Icons.chat_bubble_rounded),
-    _OnboardingData('Health Tracking', 'Monitor sleep, water intake, heart rate, and all your vital metrics.', Icons.monitor_heart_rounded),
-    _OnboardingData('Doctor Consultations', 'Book appointments and video call doctors from the comfort of your home.', Icons.video_call_rounded),
-    _OnboardingData('Family Monitoring', 'Manage the health of your entire family under one account.', Icons.family_restroom_rounded),
-    _OnboardingData('Emergency Healthcare', 'One-tap SOS sends your location to emergency contacts instantly.', Icons.emergency_rounded),
-    _OnboardingData('Cloud Medical Storage', 'All your medical documents securely stored and accessible anywhere.', Icons.cloud_done_rounded),
-    _OnboardingData('AI Wellness Insights', 'Get personalized AI recommendations for a healthier lifestyle.', Icons.spa_rounded),
-  ];
+  final _ctrl = PageController();
+  int _page = 0;
 
   Future<void> _finish() async {
     final prefs = await SharedPreferences.getInstance();
@@ -41,8 +67,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _next() {
-    if (_currentPage < _pages.length - 1) {
-      _pageCtrl.nextPage(duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+    if (_page < _slides.length - 1) {
+      _ctrl.nextPage(duration: const Duration(milliseconds: 380), curve: Curves.easeInOut);
     } else {
       _finish();
     }
@@ -50,134 +76,148 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   void dispose() {
-    _pageCtrl.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final isLast = _page == _slides.length - 1;
+
     return Scaffold(
-      backgroundColor: kBackground,
       body: Stack(
         children: [
+          // Page content
           PageView.builder(
-            controller: _pageCtrl,
-            onPageChanged: (i) => setState(() => _currentPage = i),
-            itemCount: _pages.length,
-            itemBuilder: (ctx, i) => _OnboardingPage(data: _pages[i]),
+            controller: _ctrl,
+            itemCount: _slides.length,
+            onPageChanged: (i) => setState(() => _page = i),
+            itemBuilder: (_, i) => _SlidePage(data: _slides[i]),
           ),
+
+          // Skip button top-right
           Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildBottom(),
+            top: MediaQuery.of(context).padding.top + 12,
+            right: 20,
+            child: TextButton(
+              onPressed: _finish,
+              child: Text('Skip', style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+            ),
+          ),
+
+          // Bottom controls
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).padding.bottom + 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Dots
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(_slides.length, (i) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: i == _page ? 28 : 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: i == _page ? cs.primary : cs.outlineVariant,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    )),
+                  ),
+                  const SizedBox(height: 24),
+                  // Buttons
+                  Row(
+                    children: [
+                      if (_page > 0) ...[
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _ctrl.previousPage(
+                              duration: const Duration(milliseconds: 380),
+                              curve: Curves.easeInOut,
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('Back'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          onPressed: _next,
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text(isLast ? 'Get Started' : 'Next'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildBottom() {
-    final isIOS = Platform.isIOS;
-    final content = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(_pages.length, (i) => AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            width: i == _currentPage ? 24 : 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: i == _currentPage ? kPrimaryText : kBorder,
-              borderRadius: BorderRadius.circular(3),
-            ),
-          )),
-        ),
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            if (_currentPage > 0)
-              Expanded(
-                child: WiseButton(
-                  label: 'Back',
-                  style: WiseButtonStyle.secondary,
-                  onPressed: () => _pageCtrl.previousPage(
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.easeInOut,
-                  ),
-                ),
-              ),
-            if (_currentPage > 0) const SizedBox(width: 12),
-            Expanded(
-              child: WiseButton(
-                label: _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',
-                onPressed: _next,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: _finish,
-          child: const Text('Skip', style: TextStyle(color: kSecondaryText)),
-        ),
-        SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
-      ],
-    );
-
-    if (isIOS) {
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: WiseCard(padding: const EdgeInsets.all(20), child: content),
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.all(24),
-      color: kPrimaryText,
-      child: content,
-    );
-  }
 }
 
-class _OnboardingPage extends StatelessWidget {
-  final _OnboardingData data;
-  const _OnboardingPage({required this.data});
+class _SlidePage extends StatelessWidget {
+  final _SlideData data;
+  const _SlidePage({required this.data});
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 36),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Icon in a styled container
           Container(
-            width: 140,
-            height: 140,
+            width: 130,
+            height: 130,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: kBorder, width: 1),
-              color: kElevated,
+              color: data.iconBg,
+              borderRadius: BorderRadius.circular(36),
             ),
-            child: Icon(data.icon, color: kPrimaryText, size: 64),
+            child: Icon(data.icon, color: Colors.white, size: 60),
           ),
-          const SizedBox(height: 48),
-          Text(data.title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: kPrimaryText, fontSize: 28, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 52),
+          Text(
+            data.headline,
+            textAlign: TextAlign.center,
+            style: tt.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              height: 1.15,
+            ),
+          ),
           const SizedBox(height: 16),
-          Text(data.subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: kSecondaryText, fontSize: 16, height: 1.6)),
+          Text(
+            data.body,
+            textAlign: TextAlign.center,
+            style: tt.bodyLarge?.copyWith(
+              color: cs.onSurfaceVariant,
+              height: 1.65,
+            ),
+          ),
+          // Space for bottom controls
+          const SizedBox(height: 160),
         ],
       ),
     );
   }
-}
-
-class _OnboardingData {
-  final String title, subtitle;
-  final IconData icon;
-  const _OnboardingData(this.title, this.subtitle, this.icon);
 }
