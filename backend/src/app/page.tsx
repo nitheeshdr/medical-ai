@@ -2,7 +2,7 @@ export default function Home() {
   return (
     <main style={{ fontFamily: 'monospace', padding: '2rem', background: '#000', color: '#fff', minHeight: '100vh' }}>
       <h1>MediNova AI API</h1>
-      <p style={{ color: '#b5b5b5' }}>v1.0.0 — Healthcare SaaS Backend</p>
+      <p style={{ color: '#b5b5b5' }}>v1.0.1 — Healthcare SaaS Backend · Firebase + FCM enabled</p>
       <div style={{ marginTop: '2rem', display: 'grid', gap: '1rem' }}>
         {[
           ['POST', '/api/auth/register', 'Create account'],
