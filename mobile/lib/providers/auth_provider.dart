@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/app_constants.dart';
 import '../core/network/api_client.dart';
+import 'notification_provider.dart';
 
 const _storage = FlutterSecureStorage();
 
@@ -67,6 +69,9 @@ class AuthController extends AsyncNotifier<void> {
       await _storage.write(key: AppConstants.refreshKey, value: refreshToken);
       await _storage.write(key: AppConstants.userKey, value: jsonEncode(user));
       ref.read(authStateProvider.notifier).setUser(user);
+      
+      // Register FCM token for pushes now that we have an auth token
+      ref.read(notificationServiceProvider).registerTokenWithBackend();
     });
   }
 
@@ -88,6 +93,8 @@ class AuthController extends AsyncNotifier<void> {
       await _storage.write(key: AppConstants.refreshKey, value: refreshToken);
       await _storage.write(key: AppConstants.userKey, value: jsonEncode(user));
       ref.read(authStateProvider.notifier).setUser(user);
+      
+      ref.read(notificationServiceProvider).registerTokenWithBackend();
     });
   }
 
@@ -98,6 +105,33 @@ class AuthController extends AsyncNotifier<void> {
     ref.read(authStateProvider.notifier).setUser(null);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(AppConstants.userKey);
+  }
+
+  Future<void> signInWithGoogle() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final googleSignIn = GoogleSignIn();
+      final account = await googleSignIn.signIn();
+      if (account == null) throw Exception('Google Sign-In canceled');
+
+      final res = await _api.post('/auth/google', data: {
+        'name': account.displayName ?? 'Google User',
+        'email': account.email,
+        'googleId': account.id,
+      });
+      final data = res.data as Map<String, dynamic>;
+      final token = data['token'] as String;
+      final refreshToken = data['refreshToken'] as String? ?? '';
+      final Map<String, dynamic> user = Map<String, dynamic>.from(
+          data['user'] as Map? ?? {'email': account.email});
+
+      await _storage.write(key: AppConstants.jwtKey, value: token);
+      await _storage.write(key: AppConstants.refreshKey, value: refreshToken);
+      await _storage.write(key: AppConstants.userKey, value: jsonEncode(user));
+      ref.read(authStateProvider.notifier).setUser(user);
+      
+      ref.read(notificationServiceProvider).registerTokenWithBackend();
+    });
   }
 
   Future<void> resetPassword(String email) async {

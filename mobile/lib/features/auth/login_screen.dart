@@ -106,6 +106,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 24),
 
                 WiseButton(label: 'Sign In', onPressed: _login, loading: loading),
+                const SizedBox(height: 16),
+
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.login), // Or an asset icon if we had one
+                  label: const Text('Sign in with Google'),
+                  onPressed: () async {
+                    await ref.read(authControllerProvider.notifier).signInWithGoogle();
+                    final err = ref.read(authControllerProvider).error;
+                    if (err != null && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(err.toString()), behavior: SnackBarBehavior.floating),
+                      );
+                    } else if (mounted) {
+                      context.go(RouteNames.dashboard);
+                    }
+                  },
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
                 const SizedBox(height: 24),
 
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [

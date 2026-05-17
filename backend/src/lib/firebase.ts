@@ -32,8 +32,8 @@ export async function sendPushNotification(
   body: string,
   data?: Record<string, string>,
 ): Promise<boolean> {
-  if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    console.warn('[FCM] Skipped — service account not configured')
+  if (!admin.apps.length) {
+    console.warn('[FCM] Skipped — admin app not initialized')
     return false
   }
   try {
@@ -57,7 +57,7 @@ export async function sendPushToMultiple(
   body: string,
   data?: Record<string, string>,
 ): Promise<{ success: number; failure: number }> {
-  if (!tokens.length || !process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+  if (!tokens.length || !admin.apps.length) {
     return { success: 0, failure: tokens.length }
   }
   const response = await messaging.sendEachForMulticast({

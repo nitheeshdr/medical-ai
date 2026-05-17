@@ -69,6 +69,9 @@ class NotificationService {
       badge: true,
       sound: true,
     );
+
+    // Finally, register the token with our backend
+    registerTokenWithBackend();
   }
 
   Future<String?> getFcmToken() => _messaging.getToken();
