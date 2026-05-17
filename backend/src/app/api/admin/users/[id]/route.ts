@@ -43,10 +43,10 @@ export const GET = withRole('admin')(async (req: NextRequest, _user: AuthUser) =
     return ok({
       user: {
         ...user,
-        plan: sub?.plan ?? 'free',
-        subscriptionStatus: sub?.status ?? 'inactive',
-        subscriptionStart: sub?.createdAt ?? null,
-        subscriptionRenewal: (sub as Record<string, unknown>)?.currentPeriodEnd ?? null,
+        plan: (sub as any)?.plan ?? 'free',
+        subscriptionStatus: (sub as any)?.status ?? 'inactive',
+        subscriptionStart: (sub as any)?.createdAt ?? null,
+        subscriptionRenewal: (sub as any)?.currentPeriodEnd ?? null,
         aiRequests: ai.requests,
         aiTokens: ai.totalTokens,
         aiCost: Number(ai.totalCost.toFixed(4)),
