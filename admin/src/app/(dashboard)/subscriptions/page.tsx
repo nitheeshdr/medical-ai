@@ -1,146 +1,140 @@
-'use client'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { CheckCircle, TrendingUp, Users, DollarSign } from 'lucide-react'
+import { CheckCircle, TrendingUp, Users, DollarSign, AlertCircle } from 'lucide-react'
+import { fetchSubscriptions, fetchSubscriptionPlans } from '@/lib/api'
+import { SubscriptionCharts } from '@/components/dashboard/subscription-charts'
 
-const MRR_DATA = [
-  { month: 'Jan', mrr: 12400, churn: 320 },
-  { month: 'Feb', mrr: 18200, churn: 410 },
-  { month: 'Mar', mrr: 22100, churn: 380 },
-  { month: 'Apr', mrr: 28500, churn: 290 },
-  { month: 'May', mrr: 35800, churn: 340 },
-  { month: 'Jun', mrr: 42100, churn: 280 },
-  { month: 'Jul', mrr: 48600, churn: 310 },
-]
+interface SubKpis { mrr: number; paidSubscribers: number; churnRate: number; avgLtv: number; totalUsers: number }
+interface PlanDist { plan: string; count: number; pct: number; mrr: string; color: string }
+interface MrrPoint { month: string; mrr: number; churn: number }
+interface RecentEvent { user: string; plan: string; status: string; amount: string; time: string; churn: boolean }
+interface PlanConfig { id: string; name: string; monthlyPrice: number; features: string[] }
+interface SubData { kpis: SubKpis; planBreakdown: PlanDist[]; mrrChart: MrrPoint[]; recentActivity: RecentEvent[] }
 
-const PLAN_BREAKDOWN = [
-  { plan: 'Free', count: 15240, pct: 62.5, color: '#2A2A2A', mrr: '$0' },
-  { plan: 'Pro', count: 6820, pct: 28.0, color: '#fff', mrr: '$136,400' },
-  { plan: 'Family', count: 1280, pct: 5.2, color: '#B5B5B5', mrr: '$51,200' },
-  { plan: 'Enterprise', count: 41, pct: 0.2, color: '#6B6B6B', mrr: '$41,000' },
-]
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
 
-const RECENT_SUBS = [
-  { user: 'John Johnson', from: 'Free', to: 'Pro', amount: '$19.99/mo', time: '2 min ago' },
-  { user: 'Robert Kim', from: 'Pro', to: 'Family', amount: '$39.99/mo', time: '14 min ago' },
-  { user: 'Priya Patel', from: 'Free', to: 'Pro', amount: '$19.99/mo', time: '31 min ago' },
-  { user: 'Emma Davis', from: 'Pro', to: 'Free', amount: '$0', time: '1h ago', churn: true },
-  { user: 'Tech Corp Ltd', from: 'Pro', to: 'Enterprise', amount: '$999/mo', time: '2h ago' },
-  { user: 'Sarah Ahmed', from: 'Free', to: 'Family', amount: '$39.99/mo', time: '3h ago' },
-]
+export default async function SubscriptionsPage() {
+  const [data, plans] = await Promise.all([fetchSubscriptions(), fetchSubscriptionPlans()])
 
-const TOOLTIP_STYLE = { background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 8, color: '#fff', fontSize: 12 }
+  const subData = data as SubData | null
+  const kpis = subData?.kpis ?? { mrr: 0, paidSubscribers: 0, churnRate: 0, avgLtv: 0, totalUsers: 0 }
+  const planBreakdown = subData?.planBreakdown ?? []
+  const mrrChart = subData?.mrrChart ?? []
+  const recentActivity = subData?.recentActivity ?? []
+  const plansConfig = (plans as PlanConfig[] | null) ?? []
 
-export default function SubscriptionsPage() {
+  const totalPlanUsers = planBreakdown.reduce((a, p) => a + p.count, 0)
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-white">Subscriptions</h1>
-        <p className="text-secondary text-sm mt-0.5">MRR, plan breakdown, and churn metrics</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-white">Subscriptions</h1>
+          <p className="text-secondary text-sm mt-0.5">
+            MRR, plan breakdown, and churn metrics
+            {!data && <span className="ml-2 px-2 py-0.5 bg-elevated border border-border rounded text-tertiary text-xs">backend offline</span>}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-white text-sm font-bold">{totalPlanUsers.toLocaleString()} total users</p>
+          <p className="text-secondary text-xs">{kpis.paidSubscribers.toLocaleString()} paid subscribers</p>
+        </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'MRR', value: '$48,600', change: '+18.2%', icon: DollarSign },
-          { label: 'Paid Subscribers', value: '8,141', change: '+8.4%', icon: Users },
-          { label: 'Churn Rate', value: '2.3%', change: '-0.4%', icon: TrendingUp },
-          { label: 'LTV (avg)', value: '$284', change: '+$12', icon: CheckCircle },
+          { label: 'MRR', value: `$${kpis.mrr.toLocaleString()}`, change: null, icon: DollarSign },
+          { label: 'Paid Subscribers', value: kpis.paidSubscribers.toLocaleString(), change: null, icon: Users },
+          { label: 'Churn Rate', value: `${kpis.churnRate}%`, change: null, icon: TrendingUp, warn: kpis.churnRate > 5 },
+          { label: 'Avg LTV', value: `$${kpis.avgLtv}`, change: null, icon: CheckCircle },
         ].map(k => (
           <div key={k.label} className="bg-surface border border-border rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-secondary text-xs">{k.label}</p>
-              <k.icon size={14} className="text-secondary" />
+              {'warn' in k && k.warn
+                ? <AlertCircle size={14} className="text-yellow-400" />
+                : <k.icon size={14} className="text-secondary" />
+              }
             </div>
             <p className="text-white text-2xl font-bold mb-0.5">{k.value}</p>
-            <p className={`text-xs ${k.change.startsWith('+') ? 'text-success' : 'text-red-400'}`}>{k.change} vs last month</p>
           </div>
         ))}
       </div>
 
-      {/* MRR Chart */}
-      <div className="bg-surface border border-border rounded-xl p-5">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-white font-semibold">MRR Growth</h3>
-            <p className="text-secondary text-xs mt-0.5">Monthly recurring revenue vs churn revenue</p>
-          </div>
-          <span className="text-success text-sm font-medium">+18.2%</span>
-        </div>
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={MRR_DATA}>
-            <defs>
-              <linearGradient id="mrr" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#fff" stopOpacity={0.15} />
-                <stop offset="95%" stopColor="#fff" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="churn" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#EF4444" stopOpacity={0.15} />
-                <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" />
-            <XAxis dataKey="month" tick={{ fill: '#6B6B6B', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: '#6B6B6B', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v / 1000}k`} />
-            <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`$${v.toLocaleString()}`]} />
-            <Area type="monotone" dataKey="churn" stroke="#EF4444" fill="url(#churn)" strokeWidth={1.5} name="Churn" />
-            <Area type="monotone" dataKey="mrr" stroke="#fff" fill="url(#mrr)" strokeWidth={2} name="MRR" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      {/* Charts */}
+      <SubscriptionCharts mrrChart={mrrChart} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Plan breakdown */}
         <div className="bg-surface border border-border rounded-xl p-5">
           <h3 className="text-white font-semibold mb-5">Plan Distribution</h3>
-          <div className="space-y-4">
-            {PLAN_BREAKDOWN.map(p => (
-              <div key={p.plan}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-                    <span className="text-white text-sm">{p.plan}</span>
+          {planBreakdown.length === 0 ? (
+            <p className="text-secondary text-sm text-center py-8">No subscription data yet</p>
+          ) : (
+            <>
+              <div className="space-y-4">
+                {planBreakdown.map(p => (
+                  <div key={p.plan}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                        <span className="text-white text-sm capitalize">{p.plan}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-white text-sm font-medium">{p.count.toLocaleString()}</span>
+                        <span className="text-secondary text-xs ml-2">({p.pct}%)</span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 bg-elevated rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${p.pct}%`, backgroundColor: p.color }} />
+                    </div>
+                    <p className="text-secondary text-xs mt-1 text-right">MRR: {p.mrr}</p>
                   </div>
-                  <div className="text-right">
-                    <span className="text-white text-sm font-medium">{p.count.toLocaleString()}</span>
-                    <span className="text-secondary text-xs ml-2">({p.pct}%)</span>
-                  </div>
-                </div>
-                <div className="h-1.5 bg-elevated rounded-full overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${p.pct}%`, backgroundColor: p.color }} />
-                </div>
-                <p className="text-secondary text-xs mt-1 text-right">MRR: {p.mrr}</p>
+                ))}
               </div>
-            ))}
-          </div>
-
-          <div className="mt-5 pt-4 border-t border-border flex justify-between items-center">
-            <span className="text-secondary text-sm">Total MRR</span>
-            <span className="text-white text-lg font-bold">$228,600</span>
-          </div>
+              <div className="mt-5 pt-4 border-t border-border flex justify-between items-center">
+                <span className="text-secondary text-sm">Total MRR</span>
+                <span className="text-white text-lg font-bold">${kpis.mrr.toLocaleString()}</span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Recent subscription events */}
         <div className="bg-surface border border-border rounded-xl p-5">
           <h3 className="text-white font-semibold mb-5">Recent Activity</h3>
-          <div className="space-y-3">
-            {RECENT_SUBS.map((s, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
-                  s.churn ? 'bg-red-500/10 text-red-400' : 'bg-success/10 text-success'
-                }`}>
-                  {s.user[0]}
+          {recentActivity.length === 0 ? (
+            <p className="text-secondary text-sm text-center py-8">No recent subscription changes</p>
+          ) : (
+            <div className="space-y-3">
+              {recentActivity.slice(0, 10).map((s, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
+                    s.churn ? 'bg-red-500/10 text-red-400' : 'bg-success/10 text-success'
+                  }`}>
+                    {s.user[0]?.toUpperCase() ?? '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-medium truncate">{s.user}</p>
+                    <p className="text-secondary text-xs">
+                      <span className="capitalize">{s.plan}</span>
+                      {' · '}
+                      <span className={s.churn ? 'text-red-400' : 'text-success capitalize'}>{s.status}</span>
+                      {' · '}{s.amount}
+                    </p>
+                  </div>
+                  <span className="text-tertiary text-xs flex-shrink-0">{timeAgo(s.time)}</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-medium">{s.user}</p>
-                  <p className="text-secondary text-xs">
-                    {s.from} → <span className={s.churn ? 'text-red-400' : 'text-success'}>{s.to}</span>
-                    {' · '}{s.amount}
-                  </p>
-                </div>
-                <span className="text-tertiary text-xs flex-shrink-0">{s.time}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -148,31 +142,36 @@ export default function SubscriptionsPage() {
       <div>
         <h3 className="text-white font-semibold mb-4">Plan Configuration</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { name: 'Free', price: '$0', features: ['5 AI chats/day', '3 Rx scans/mo', 'Basic health tracking'], active: 15240 },
-            { name: 'Pro', price: '$19.99/mo', features: ['Unlimited AI chat', 'Unlimited Rx scans', 'Full reports', 'Appointments'], active: 6820 },
-            { name: 'Family', price: '$39.99/mo', features: ['5 members', 'All Pro features', 'Family health hub', 'Priority support'], active: 1280 },
-            { name: 'Enterprise', price: '$999/mo', features: ['Unlimited members', 'API access', 'Custom AI models', 'Dedicated CSM'], active: 41 },
-          ].map(plan => (
-            <div key={plan.name} className="bg-surface border border-border rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-white font-semibold">{plan.name}</h4>
-                <span className="text-secondary text-xs">{plan.active.toLocaleString()} users</span>
+          {(plansConfig.length > 0 ? plansConfig : [
+            { id: 'free', name: 'Free', monthlyPrice: 0, features: ['10 AI chats/day', 'Rx Scanner', 'Basic tracking'] },
+            { id: 'pro', name: 'Pro', monthlyPrice: 9.99, features: ['Unlimited AI', 'Full reports', 'Appointments'] },
+            { id: 'family', name: 'Family', monthlyPrice: 19.99, features: ['5 members', 'All Pro features', 'Emergency SOS'] },
+            { id: 'enterprise', name: 'Enterprise', monthlyPrice: 49.99, features: ['Unlimited members', 'API access', 'HIPAA'] },
+          ]).map(plan => {
+            const liveData = planBreakdown.find(p => p.plan === plan.id)
+            return (
+              <div key={plan.id} className="bg-surface border border-border rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-white font-semibold">{plan.name}</h4>
+                  <span className="text-secondary text-xs">{liveData?.count.toLocaleString() ?? '—'} users</span>
+                </div>
+                <p className="text-white text-lg font-bold mb-3">
+                  {plan.monthlyPrice === 0 ? '$0' : `$${plan.monthlyPrice}/mo`}
+                </p>
+                <div className="space-y-1.5">
+                  {plan.features.map(f => (
+                    <div key={f} className="flex items-center gap-2">
+                      <CheckCircle size={11} className="text-success flex-shrink-0" />
+                      <span className="text-secondary text-xs">{f}</span>
+                    </div>
+                  ))}
+                </div>
+                <button className="mt-4 w-full border border-border text-secondary text-xs rounded-lg py-1.5 hover:text-white hover:border-white/30 transition-colors">
+                  Edit Plan
+                </button>
               </div>
-              <p className="text-white text-lg font-bold mb-3">{plan.price}</p>
-              <div className="space-y-1.5">
-                {plan.features.map(f => (
-                  <div key={f} className="flex items-center gap-2">
-                    <CheckCircle size={11} className="text-success flex-shrink-0" />
-                    <span className="text-secondary text-xs">{f}</span>
-                  </div>
-                ))}
-              </div>
-              <button className="mt-4 w-full border border-border text-secondary text-xs rounded-lg py-1.5 hover:text-white hover:border-white/30 transition-colors">
-                Edit Plan
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
